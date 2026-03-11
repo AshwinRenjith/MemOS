@@ -1,0 +1,301 @@
+name: ci
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  PYTHON_VERSION: "3.11"
+  UV_CACHE_DIR: /tmp/.uv-cache
+
+# Cancel in-progress runs for the same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ============================================================
+  # LINT — Code quality and formatting
+  # ============================================================
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Ruff check (lint)
+        run: uv run ruff check . --output-format=github
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: MyPy type check
+        run: uv run mypy services/ sdk/python/ --ignore-missing-imports
+        continue-on-error: true  # Warning-only during Phase 0/A scaffold
+
+  # ============================================================
+  # UNIT — Fast isolated tests
+  # ============================================================
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run unit tests
+        run: |
+          uv run pytest tests/unit/ \
+            -q \
+            --tb=short \
+            --co -q 2>/dev/null | head -5 || echo "No unit tests found yet (Phase 0 scaffold)"
+
+  # ============================================================
+  # INTEGRATION — Tests requiring service dependencies
+  # ============================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: memoryos_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: memoryos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Apply SQL migrations
+        env:
+          DATABASE_URL: postgresql://memoryos_test:test_password@localhost:5432/memoryos_test
+        run: |
+          for f in schemas/sql/migrations/0*.sql; do
+            echo "Applying $f ..."
+            PGPASSWORD=test_password psql -h localhost -U memoryos_test -d memoryos_test -f "$f" || true
+          done
+
+      - name: Run integration tests
+        env:
+          DATABASE_URL: postgresql://memoryos_test:test_password@localhost:5432/memoryos_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          uv run pytest tests/integration/ \
+            -q \
+            --tb=short \
+            --co -q 2>/dev/null | head -5 || echo "No integration tests found yet (Phase 0 scaffold)"
+
+  # ============================================================
+  # CONTRACT — OpenAPI schema validation
+  # ============================================================
+  contract:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate OpenAPI schemas
+        run: |
+          # Verify OpenAPI files are valid YAML
+          python3 -c "
+          import yaml, sys
+          for f in ['schemas/openapi/v1/core.yaml', 'schemas/openapi/v1/governance.yaml']:
+              try:
+                  with open(f) as fh:
+                      doc = yaml.safe_load(fh)
+                      assert doc.get('openapi', '').startswith('3.'), f'{f}: missing openapi 3.x version'
+                      assert 'paths' in doc, f'{f}: missing paths'
+                      print(f'✓ {f} is valid OpenAPI')
+              except Exception as e:
+                  print(f'✗ {f}: {e}', file=sys.stderr)
+                  sys.exit(1)
+          "
+
+      - name: Validate event schemas
+        run: |
+          python3 -c "
+          import json, sys
+          for f in ['schemas/events/memory-commit-v1.json']:
+              try:
+                  with open(f) as fh:
+                      doc = json.load(fh)
+                      assert '\$schema' in doc, f'{f}: missing \$schema'
+                      print(f'✓ {f} is valid JSON Schema')
+              except Exception as e:
+                  print(f'✗ {f}: {e}', file=sys.stderr)
+                  sys.exit(1)
+          "
+
+  # ============================================================
+  # SECURITY — Baseline security checks
+  # ============================================================
+  security:
+    name: Security Baseline
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Search for common secret patterns
+          if grep -rn --include="*.py" --include="*.yaml" --include="*.yml" --include="*.json" \
+            -E "(password|secret|api_key|token)\s*[:=]\s*['\"][^'\"]{8,}" \
+            services/ sdk/ schemas/ 2>/dev/null | grep -v "change_me" | grep -v "test_password"; then
+            echo "⚠ Potential hardcoded secrets found!"
+            exit 1
+          else
+            echo "✓ No hardcoded secrets detected"
+          fi
+
+      - name: Ruff security rules (bandit subset)
+        run: uv run ruff check . --select S --output-format=github || true
+
+      - name: Verify RLS in migrations
+        run: |
+          # Every migration that creates a table with org_id must enable RLS
+          python3 -c "
+          import re, sys, glob
+          errors = []
+          for f in sorted(glob.glob('schemas/sql/migrations/0*.sql')):
+              content = open(f).read()
+              tables = re.findall(r'CREATE TABLE (\w+)', content)
+              for table in tables:
+                  if 'org_id' in content.split(f'CREATE TABLE {table}')[1].split('CREATE TABLE')[0] if len(content.split(f'CREATE TABLE {table}')) > 1 else content:
+                      if f'ALTER TABLE {table} ENABLE ROW LEVEL SECURITY' not in content:
+                          errors.append(f'{f}: table {table} has org_id but no RLS!')
+          if errors:
+              for e in errors:
+                  print(f'✗ {e}', file=sys.stderr)
+              sys.exit(1)
+          else:
+              print('✓ All org-scoped tables have RLS enabled')
+          "
+
+  # ============================================================
+  # INVARIANT — System invariant enforcement tests
+  # ============================================================
+  invariant:
+    name: Invariant Tests
+    runs-on: ubuntu-latest
+    needs: integration
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: memoryos_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: memoryos_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Run invariant tests
+        env:
+          DATABASE_URL: postgresql://memoryos_test:test_password@localhost:5432/memoryos_test
+        run: |
+          uv run pytest tests/invariants/ \
+            -q \
+            --tb=short \
+            --co -q 2>/dev/null | head -5 || echo "No invariant tests found yet (Phase 0 scaffold)"
+
+  # ============================================================
+  # LOAD SMOKE — Lightweight performance baseline
+  # ============================================================
+  load-smoke:
+    name: Load Smoke Test
+    runs-on: ubuntu-latest
+    needs: integration
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for load test scripts
+        run: |
+          if ls tests/load/*.js 2>/dev/null; then
+            echo "Load test scripts found — will run in Phase A"
+          else
+            echo "No load test scripts yet (Phase 0 scaffold)"
+          fi

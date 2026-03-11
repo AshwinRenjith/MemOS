@@ -1,0 +1,66 @@
+# ============================================================
+# MemoryOS — .gitignore
+# ============================================================
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# --- Node / TypeScript ---
+node_modules/
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- IDE ---
+.idea/
+.vscode/
+*.code-workspace
+
+# --- Infrastructure ---
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Test / Coverage ---
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/
+.mypy_cache/
+
+# --- Build artifacts ---
+artifacts/
+evidence/
+
+# --- Secrets (NEVER commit) ---
+*.pem
+*.key
+*.crt
+*.p12
+secrets/

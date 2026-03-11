@@ -1,0 +1,647 @@
+openapi: 3.1.0
+
+info:
+  title: MemoryOS Core API
+  version: v1.0.0
+  description: |
+    Core memory operations API for MemoryOS — the version-controlled,
+    auditable memory infrastructure layer for production agentic AI.
+
+    ## Authentication
+    - Bearer token (JWT) for user-facing requests.
+    - API key (X-API-Key header, scoped to repo) for agent SDK requests.
+
+    ## Conventions
+    - All POST requests require `Idempotency-Key` header (UUID).
+    - State-mutating requests require `If-Match` header (ETag for optimistic concurrency).
+    - All list endpoints use cursor-based pagination.
+    - All errors use RFC 7807 Problem+JSON format.
+    - All timestamps are Unix epoch milliseconds (int64).
+
+    ## Rate Limiting
+    Per-org per-endpoint limits. Headers: X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset.
+
+  contact:
+    name: MemoryOS Engineering
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+
+servers:
+  - url: http://localhost:8000/v1
+    description: Local development
+  - url: https://api.memoryos.dev/v1
+    description: Staging
+  - url: https://api.memoryos.io/v1
+    description: Production
+
+tags:
+  - name: Memory
+    description: Read and write memory operations
+  - name: Commits
+    description: Commit history and rollback operations
+  - name: Repositories
+    description: Repository management
+  - name: Health
+    description: Service health checks
+
+# ============================================================
+# SECURITY SCHEMES
+# ============================================================
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token for user-facing requests
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Agent API key scoped to a repository
+
+  # ============================================================
+  # COMMON HEADERS
+  # ============================================================
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Unique idempotency key (UUID). Server caches response for 24h.
+
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      schema:
+        type: string
+      description: ETag for optimistic concurrency control.
+
+    PaginationLimit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+      description: Number of items per page.
+
+    PaginationCursor:
+      name: cursor
+      in: query
+      required: false
+      schema:
+        type: string
+      description: Opaque cursor from previous response `next_cursor`.
+
+    RepoIdPath:
+      name: repo_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Repository UUID.
+
+    CommitHashPath:
+      name: commit_hash
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-f0-9]{64}$'
+      description: SHA-256 commit hash (64 hex characters).
+
+  # ============================================================
+  # RESPONSE HEADERS
+  # ============================================================
+  headers:
+    X-RateLimit-Limit:
+      schema:
+        type: integer
+      description: Maximum requests per window.
+    X-RateLimit-Remaining:
+      schema:
+        type: integer
+      description: Remaining requests in current window.
+    X-RateLimit-Reset:
+      schema:
+        type: integer
+      description: Unix epoch seconds when window resets.
+    ETag:
+      schema:
+        type: string
+      description: Entity tag for optimistic concurrency.
+
+  # ============================================================
+  # SCHEMAS
+  # ============================================================
+  schemas:
+    # --- Write Memory ---
+    WriteMemoryRequest:
+      type: object
+      required: [content, source_type]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 8000
+          description: Memory content text.
+        source_type:
+          type: string
+          enum: [OBSERVATION, INFERENCE, USER_STATED, TOOL_OUTPUT, HUMAN_APPROVED]
+        priority:
+          type: string
+          enum: [normal, high, critical]
+          default: normal
+          description: Controls hot (critical=sync) vs cold (normal/high=async) path.
+        branch:
+          type: string
+          default: main
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/Evidence'
+        data_class:
+          type: string
+          enum: [GENERAL, BEHAVIORAL, PII_ADJACENT, SENSITIVE]
+          default: GENERAL
+        entity_context:
+          type: array
+          items:
+            type: string
+            pattern: '^[a-z_]+:[a-zA-Z0-9_-]+$'
+          description: Entity references for graph linking (e.g., "user:u_123").
+
+    WriteMemoryResponse:
+      type: object
+      required: [commit_hash, action, importance_score, idempotency_key]
+      properties:
+        commit_hash:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+        action:
+          type: string
+          enum: [WRITTEN, DEDUPLICATED, QUEUED, SANDBOXED, BLOCKED]
+        importance_score:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+        job_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Non-null if action is QUEUED. Poll /v1/jobs/{job_id}.
+        idempotency_key:
+          type: string
+          format: uuid
+        warnings:
+          type: array
+          items:
+            type: string
+
+    # --- Retrieve Memory ---
+    RetrieveMemoryRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          minLength: 1
+        token_budget:
+          type: integer
+          minimum: 500
+          maximum: 8000
+          default: 2000
+        entity_context:
+          type: array
+          items:
+            type: string
+        include_tiers:
+          type: array
+          items:
+            type: string
+            enum: [WORKING, EPISODIC, SEMANTIC, RELATIONAL]
+          default: [WORKING, EPISODIC, SEMANTIC, RELATIONAL]
+        include_relational:
+          type: boolean
+          default: true
+        branch:
+          type: string
+          default: main
+        as_of_commit:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          nullable: true
+          description: "Null = HEAD. Hash = time-travel retrieval."
+        min_confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.3
+        min_importance:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+          default: 0.0
+
+    RetrieveMemoryResponse:
+      type: object
+      required: [injected_context, memories, as_of_commit, token_count, fallback_used]
+      properties:
+        injected_context:
+          type: string
+          description: Pre-formatted XML block ready for LLM injection.
+        memories:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryNode'
+        as_of_commit:
+          type: string
+        token_count:
+          type: integer
+        fallback_used:
+          type: boolean
+          description: True if retrieval degraded (e.g., NLI unavailable).
+
+    # --- Memory Node ---
+    MemoryNode:
+      type: object
+      required: [node_id, content, tier, score, confidence, source_type, commit_hash, conflicted]
+      properties:
+        node_id:
+          type: string
+          format: uuid
+        content:
+          type: string
+        tier:
+          type: string
+          enum: [EPISODIC, SEMANTIC, RELATIONAL]
+        score:
+          $ref: '#/components/schemas/MemoryScore'
+        confidence:
+          type: number
+          format: float
+          minimum: 0.0
+          maximum: 1.0
+        source_type:
+          type: string
+        commit_hash:
+          type: string
+        conflicted:
+          type: boolean
+        conflict_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    MemoryScore:
+      type: object
+      required: [relevance, recency, importance, final]
+      properties:
+        relevance:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        recency:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        importance:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+        final:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+
+    # --- Commits ---
+    CommitSummary:
+      type: object
+      required: [hash, type, author_id, timestamp, importance_score, branch, description, novelty_score]
+      properties:
+        hash:
+          type: string
+        type:
+          type: string
+          enum: [OBSERVE, LEARN, FORGET, CORRECT, MERGE, ROLLBACK, INIT, CONSOLIDATE]
+        author_id:
+          type: string
+          format: uuid
+        timestamp:
+          type: integer
+          format: int64
+        importance_score:
+          type: number
+        branch:
+          type: string
+        description:
+          type: string
+        novelty_score:
+          type: number
+
+    CommitListResponse:
+      type: object
+      required: [commits]
+      properties:
+        commits:
+          type: array
+          items:
+            $ref: '#/components/schemas/CommitSummary'
+        next_cursor:
+          type: string
+          nullable: true
+
+    # --- Rollback ---
+    RollbackRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Rationale for audit trail.
+        target_branch:
+          type: string
+          default: main
+
+    RollbackResponse:
+      type: object
+      required: [job_id, estimated_seconds]
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        estimated_seconds:
+          type: integer
+
+    # --- Evidence ---
+    Evidence:
+      type: object
+      required: [type, ref, confidence]
+      properties:
+        type:
+          type: string
+        ref:
+          type: string
+        confidence:
+          type: number
+          minimum: 0.0
+          maximum: 1.0
+
+    # --- Error (RFC 7807) ---
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        extensions:
+          type: object
+          properties:
+            code:
+              type: string
+            retry_after_ms:
+              type: integer
+              nullable: true
+
+    # --- Health ---
+    HealthResponse:
+      type: object
+      required: [status, version, timestamp]
+      properties:
+        status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        version:
+          type: string
+        timestamp:
+          type: integer
+          format: int64
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum: [ok, degraded, failed]
+
+# ============================================================
+# PATHS
+# ============================================================
+paths:
+  # --- Health ---
+  /health:
+    get:
+      tags: [Health]
+      operationId: healthCheck
+      summary: Service health check
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # --- Write Memory ---
+  /repos/{repo_id}/memory:
+    post:
+      tags: [Memory]
+      operationId: writeMemory
+      summary: Write a memory to a repository
+      parameters:
+        - $ref: '#/components/parameters/RepoIdPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WriteMemoryRequest'
+      responses:
+        '200':
+          description: Memory written synchronously (critical priority).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteMemoryResponse'
+        '202':
+          description: Memory accepted for async processing (normal/high priority).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriteMemoryResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '403':
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '409':
+          description: Branch head conflict or duplicate commit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '429':
+          description: Rate limited.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '451':
+          description: Branch under legal hold.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  # --- Retrieve Memory ---
+  /repos/{repo_id}/retrieve:
+    post:
+      tags: [Memory]
+      operationId: retrieveMemory
+      summary: Retrieve memories from a repository
+      parameters:
+        - $ref: '#/components/parameters/RepoIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetrieveMemoryRequest'
+      responses:
+        '200':
+          description: Ranked memories returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetrieveMemoryResponse'
+        '400':
+          description: Invalid request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  # --- List Commits ---
+  /repos/{repo_id}/commits:
+    get:
+      tags: [Commits]
+      operationId: listCommits
+      summary: List commits with pagination
+      parameters:
+        - $ref: '#/components/parameters/RepoIdPath'
+        - $ref: '#/components/parameters/PaginationLimit'
+        - $ref: '#/components/parameters/PaginationCursor'
+        - name: branch
+          in: query
+          schema:
+            type: string
+            default: main
+        - name: commit_type
+          in: query
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [OBSERVE, LEARN, FORGET, CORRECT, MERGE, ROLLBACK, INIT, CONSOLIDATE]
+          style: form
+          explode: true
+        - name: author_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: from_timestamp
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: to_timestamp
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: min_importance
+          in: query
+          schema:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+      responses:
+        '200':
+          description: Paginated commit list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommitListResponse'
+
+  # --- Rollback ---
+  /repos/{repo_id}/revert/{commit_hash}:
+    post:
+      tags: [Commits]
+      operationId: rollbackToCommit
+      summary: Rollback to a previous commit
+      description: |
+        Creates a NEW ROLLBACK commit that restores memory state to the
+        snapshot at the given commit_hash. Does NOT mutate historical
+        commits (INV-06). All memory nodes written after commit_hash on
+        target_branch are marked DEPRECATED.
+      parameters:
+        - $ref: '#/components/parameters/RepoIdPath'
+        - $ref: '#/components/parameters/CommitHashPath'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RollbackRequest'
+      responses:
+        '202':
+          description: Rollback job accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RollbackResponse'
+        '404':
+          description: Commit hash not found in repo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '451':
+          description: Nodes in range have legal hold.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'

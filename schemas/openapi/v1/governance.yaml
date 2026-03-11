@@ -1,0 +1,629 @@
+openapi: 3.1.0
+
+info:
+  title: MemoryOS Governance API
+  version: v1.0.0
+  description: |
+    Governance operations for MemoryOS — branch lifecycle, pull requests,
+    conflict resolution, and key management.
+
+    Governance APIs enforce the state machines defined in PRD §2.2–2.4.
+    All state transitions are explicit. Invalid transitions return HTTP 422.
+
+    Phase B and later — see PRD §12 for phased delivery scope.
+
+servers:
+  - url: http://localhost:8000/v1
+    description: Local development
+  - url: https://api.memoryos.dev/v1
+    description: Staging
+  - url: https://api.memoryos.io/v1
+    description: Production
+
+tags:
+  - name: Branches
+    description: Branch lifecycle management (§2.2)
+  - name: PullRequests
+    description: Knowledge merge proposals (§2.3)
+  - name: Conflicts
+    description: Contradiction lifecycle management (§2.4)
+  - name: Keys
+    description: Key registration and management (§7.3)
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    # --- Branch ---
+    BranchCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+        purpose:
+          type: string
+          description: Human-readable purpose for this branch.
+        from_branch:
+          type: string
+          default: main
+          description: Branch to create from (copies HEAD commit).
+
+    Branch:
+      type: object
+      required: [branch_id, repo_id, name, status, head_commit_hash, created_by, created_at]
+      properties:
+        branch_id:
+          type: string
+          format: uuid
+        repo_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, MERGED, SOFT_DELETED, LEGAL_HOLD]
+        head_commit_hash:
+          type: string
+        purpose:
+          type: string
+        created_by:
+          type: string
+          format: uuid
+        created_at:
+          type: integer
+          format: int64
+        retention_days:
+          type: integer
+
+    BranchListResponse:
+      type: object
+      required: [branches]
+      properties:
+        branches:
+          type: array
+          items:
+            $ref: '#/components/schemas/Branch'
+        next_cursor:
+          type: string
+          nullable: true
+
+    # --- Legal Hold ---
+    LegalHoldRequest:
+      type: object
+      required: [reason, hold_until]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+        hold_until:
+          type: integer
+          format: int64
+          description: Unix epoch ms. Minimum 30 days from now.
+
+    # --- Pull Request ---
+    PullRequestCreate:
+      type: object
+      required: [source_branch_id, target_repo_id, review_type]
+      properties:
+        source_branch_id:
+          type: string
+          format: uuid
+        target_repo_id:
+          type: string
+          format: uuid
+        review_type:
+          type: string
+          enum: [AUTO, HUMAN, AGENT, CONSENSUS]
+        title:
+          type: string
+        description:
+          type: string
+
+    PullRequest:
+      type: object
+      required: [pr_id, source_branch_id, target_repo_id, proposer_id, review_type, status, created_at, etag]
+      properties:
+        pr_id:
+          type: string
+          format: uuid
+        source_branch_id:
+          type: string
+          format: uuid
+        target_repo_id:
+          type: string
+          format: uuid
+        proposer_id:
+          type: string
+          format: uuid
+        review_type:
+          type: string
+          enum: [AUTO, HUMAN, AGENT, CONSENSUS]
+        status:
+          type: string
+          enum: [DRAFT, OPEN, IN_REVIEW, CHANGES_REQUESTED, APPROVED, REJECTED, MERGED, CLOSED]
+        semantic_diff:
+          type: object
+          nullable: true
+        etag:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        merged_at:
+          type: integer
+          format: int64
+          nullable: true
+
+    PRReviewAction:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [approve, reject, request_changes]
+        rationale:
+          type: string
+          minLength: 1
+
+    # --- Conflict ---
+    ConflictRecord:
+      type: object
+      required: [conflict_id, repo_id, node_a_id, node_b_id, contradiction_type, resolution_strategy, status, created_at]
+      properties:
+        conflict_id:
+          type: string
+          format: uuid
+        repo_id:
+          type: string
+          format: uuid
+        node_a_id:
+          type: string
+          format: uuid
+        node_b_id:
+          type: string
+          format: uuid
+        contradiction_type:
+          type: string
+          enum: [DIRECT, PARTIAL, TEMPORAL]
+        resolution_strategy:
+          type: string
+          enum: [EVIDENCE_WEIGHT, VOTE, HUMAN_REVIEW, MANAGER_AGENT, TIMESTAMP_WIN]
+        status:
+          type: string
+          enum: [OPEN, IN_REVIEW, RESOLVED, DEFERRED]
+        resolver_id:
+          type: string
+          format: uuid
+          nullable: true
+        rationale:
+          type: string
+          nullable: true
+        created_at:
+          type: integer
+          format: int64
+        resolved_at:
+          type: integer
+          format: int64
+          nullable: true
+
+    ConflictResolveRequest:
+      type: object
+      required: [winning_node_id, rationale]
+      properties:
+        winning_node_id:
+          type: string
+          format: uuid
+          description: The node_id to keep as authoritative.
+        rationale:
+          type: string
+          minLength: 1
+
+    # --- Keys ---
+    KeyRegisterRequest:
+      type: object
+      required: [public_key, custody_mode]
+      properties:
+        public_key:
+          type: string
+          format: byte
+          description: Base64-encoded Ed25519 public key.
+        custody_mode:
+          type: string
+          enum: [LOCAL_KEY, HOSTED_KMS, CUSTOMER_KMS]
+
+    KeyInfo:
+      type: object
+      required: [key_id, agent_id, custody_mode, status, created_at]
+      properties:
+        key_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        custody_mode:
+          type: string
+          enum: [LOCAL_KEY, HOSTED_KMS, CUSTOMER_KMS]
+        status:
+          type: string
+          enum: [ACTIVE, ROTATED_OUT, REVOKED]
+        created_at:
+          type: integer
+          format: int64
+        rotated_at:
+          type: integer
+          format: int64
+          nullable: true
+        revoked_at:
+          type: integer
+          format: int64
+          nullable: true
+
+    # --- Error ---
+    ProblemDetail:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        extensions:
+          type: object
+          properties:
+            code:
+              type: string
+            retry_after_ms:
+              type: integer
+              nullable: true
+
+# ============================================================
+# PATHS (Phase B+ — skeletons defined now for contract testing)
+# ============================================================
+paths:
+  # --- Branches ---
+  /repos/{repo_id}/branches:
+    get:
+      tags: [Branches]
+      operationId: listBranches
+      summary: List branches in a repository
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: include_deleted
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Branch list returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BranchListResponse'
+
+    post:
+      tags: [Branches]
+      operationId: createBranch
+      summary: Create a new branch
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BranchCreate'
+      responses:
+        '201':
+          description: Branch created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+
+  /repos/{repo_id}/branches/{branch_id}:
+    delete:
+      tags: [Branches]
+      operationId: softDeleteBranch
+      summary: Soft-delete a branch
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Branch soft-deleted.
+        '451':
+          description: Branch under legal hold — cannot delete.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /repos/{repo_id}/branches/{branch_id}/legal-hold:
+    post:
+      tags: [Branches]
+      operationId: placeLegalHold
+      summary: Place legal hold on a branch (OWNER/ADMIN only)
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: branch_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LegalHoldRequest'
+      responses:
+        '200':
+          description: Legal hold placed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Branch'
+
+  # --- Pull Requests ---
+  /repos/{repo_id}/pulls:
+    post:
+      tags: [PullRequests]
+      operationId: createPullRequest
+      summary: Create a pull request
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PullRequestCreate'
+      responses:
+        '201':
+          description: Pull request created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+
+  /repos/{repo_id}/pulls/{pr_id}/review:
+    post:
+      tags: [PullRequests]
+      operationId: reviewPullRequest
+      summary: Review a pull request (approve, reject, or request changes)
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: pr_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: If-Match
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PRReviewAction'
+      responses:
+        '200':
+          description: Review action applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PullRequest'
+
+  # --- Conflicts ---
+  /repos/{repo_id}/conflicts:
+    get:
+      tags: [Conflicts]
+      operationId: listConflicts
+      summary: List conflict records for a repository
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [OPEN, IN_REVIEW, RESOLVED, DEFERRED]
+      responses:
+        '200':
+          description: Conflict records returned.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conflicts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConflictRecord'
+
+  /repos/{repo_id}/conflicts/{conflict_id}/resolve:
+    post:
+      tags: [Conflicts]
+      operationId: resolveConflict
+      summary: Resolve a conflict record
+      parameters:
+        - name: repo_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: conflict_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConflictResolveRequest'
+      responses:
+        '200':
+          description: Conflict resolved.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictRecord'
+
+  # --- Keys ---
+  /keys/register:
+    post:
+      tags: [Keys]
+      operationId: registerKey
+      summary: Register a public key for an agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyRegisterRequest'
+      responses:
+        '201':
+          description: Key registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyInfo'
+
+  /keys/rotate:
+    post:
+      tags: [Keys]
+      operationId: rotateKey
+      summary: Rotate an agent's signing key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, new_public_key]
+              properties:
+                agent_id:
+                  type: string
+                  format: uuid
+                new_public_key:
+                  type: string
+                  format: byte
+      responses:
+        '200':
+          description: Key rotated. Old key retained for historical verification.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyInfo'
+
+  /keys/revoke:
+    post:
+      tags: [Keys]
+      operationId: revokeKey
+      summary: Revoke an agent's signing key (suspends agent)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [agent_id, reason]
+              properties:
+                agent_id:
+                  type: string
+                  format: uuid
+                reason:
+                  type: string
+                  minLength: 1
+      responses:
+        '200':
+          description: Key revoked. Agent suspended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyInfo'

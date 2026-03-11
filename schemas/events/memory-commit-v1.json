@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://memoryos.io/schemas/events/memory-commit-v1.json",
+  "title": "MemoryCommitEvent",
+  "description": "Event published to Kafka topic memory.commits.{org_id} on every new commit. Consumed by projection writers (Qdrant, Neo4j, Redis). See PRD §3.1.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "event_type",
+    "timestamp",
+    "org_id",
+    "repo_id",
+    "commit_hash",
+    "commit_type",
+    "branch_id",
+    "branch_name",
+    "author_id",
+    "author_type",
+    "diff_object"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Event schema version for forward compatibility."
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique event ID. Equal to outbox_id."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "memory.commit.created",
+        "memory.commit.rollback"
+      ],
+      "description": "Event type discriminator."
+    },
+    "timestamp": {
+      "type": "integer",
+      "description": "Unix epoch milliseconds when the commit was created."
+    },
+    "org_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Organization ID. Used for topic routing: memory.commits.{org_id}."
+    },
+    "repo_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "commit_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "SHA-256 hash of the canonical commit payload. Idempotency key for consumers."
+    },
+    "commit_type": {
+      "type": "string",
+      "enum": ["OBSERVE", "LEARN", "FORGET", "CORRECT", "MERGE", "ROLLBACK", "INIT", "CONSOLIDATE"]
+    },
+    "branch_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "branch_name": {
+      "type": "string"
+    },
+    "parent_hash": {
+      "type": ["string", "null"],
+      "pattern": "^[a-f0-9]{64}$",
+      "description": "Parent commit hash. Null for INIT commits."
+    },
+    "author_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "author_type": {
+      "type": "string",
+      "enum": ["AGENT", "USER", "SYSTEM"]
+    },
+    "signature": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "description": "Ed25519 signature over commit_hash|timestamp."
+    },
+    "diff_object": {
+      "$ref": "#/$defs/DiffObject"
+    },
+    "importance_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "novelty_score": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Informational metadata. Not part of commit hash."
+    }
+  },
+  "$defs": {
+    "DiffObject": {
+      "type": "object",
+      "description": "Versioned diff object per PRD §6.3.",
+      "required": ["schema_version"],
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "1.0"
+        },
+        "nodes_added": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node_id", "action", "importance_score", "tier", "data_class"],
+            "properties": {
+              "node_id": { "type": "string", "format": "uuid" },
+              "action": { "type": "string", "enum": ["NOVEL", "RELATED", "WEAKLY_RELATED"] },
+              "importance_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+              "tier": { "type": "string", "enum": ["EPISODIC", "SEMANTIC", "RELATIONAL"] },
+              "data_class": { "type": "string", "enum": ["GENERAL", "BEHAVIORAL", "PII_ADJACENT", "SENSITIVE"] }
+            }
+          }
+        },
+        "nodes_modified": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node_id", "action", "confidence_delta"],
+            "properties": {
+              "node_id": { "type": "string", "format": "uuid" },
+              "action": { "type": "string", "enum": ["REFINEMENT", "REINFORCEMENT"] },
+              "confidence_delta": { "type": "number", "minimum": -1.0, "maximum": 1.0 }
+            }
+          }
+        },
+        "nodes_deprecated": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node_id", "reason"],
+            "properties": {
+              "node_id": { "type": "string", "format": "uuid" },
+              "reason": { "type": "string", "enum": ["DECAYED", "SUPERSEDED", "ROLLBACK"] }
+            }
+          }
+        },
+        "edges_added": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "type"],
+            "properties": {
+              "from": { "type": "string", "format": "uuid" },
+              "to": { "type": "string", "format": "uuid" },
+              "type": { "type": "string", "enum": ["RELATED", "SUPPORTS", "CONTRADICTS"] }
+            }
+          }
+        },
+        "edges_removed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "type"],
+            "properties": {
+              "from": { "type": "string", "format": "uuid" },
+              "to": { "type": "string", "format": "uuid" },
+              "type": { "type": "string" }
+            }
+          }
+        },
+        "conflicts_opened": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["conflict_id", "node_a", "node_b"],
+            "properties": {
+              "conflict_id": { "type": "string", "format": "uuid" },
+              "node_a": { "type": "string", "format": "uuid" },
+              "node_b": { "type": "string", "format": "uuid" }
+            }
+          }
+        },
+        "conflicts_resolved": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["conflict_id", "winning_node", "rationale"],
+            "properties": {
+              "conflict_id": { "type": "string", "format": "uuid" },
+              "winning_node": { "type": "string", "format": "uuid" },
+              "rationale": { "type": "string" }
+            }
+          }
+        },
+        "duplicates_suppressed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "novelty_score": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "nli_degraded": {
+          "type": "boolean"
+        },
+        "importance_degraded": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

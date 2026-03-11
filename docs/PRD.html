@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemoryOS v2.1 - Complete Architecture Visualization</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card-gradient {
+            background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+        }
+
+        .sidebar-gradient {
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+        }
+
+        .state-box {
+            transition: all 0.3s ease;
+        }
+
+        .state-box:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .flow-arrow {
+            animation: flowAnimation 2s infinite;
+        }
+
+        @keyframes flowAnimation {
+
+            0%,
+            100% {
+                opacity: 0.3;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.7;
+            }
+        }
+
+        .timeline-line {
+            position: relative;
+        }
+
+        .timeline-line::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #667eea, #764ba2);
+            transform: translateX(-50%);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .code-block {
+            background: #1e293b;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .diagram-container {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+
+        .metric-card {
+            background: linear-gradient(145deg, #ffffff 0%, #f1f5f9 100%);
+            border-left: 4px solid #667eea;
+        }
+
+        .invariant-badge {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+        }
+
+        .phase-badge {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        }
+
+        .scroll-smooth {
+            scroll-behavior: smooth;
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .state-machine-node {
+            transition: all 0.3s ease;
+        }
+
+        .state-machine-node:hover {
+            transform: scale(1.05);
+        }
+
+        .flow-connection {
+            stroke-dasharray: 5;
+            animation: dashAnimation 1s linear infinite;
+        }
+
+        @keyframes dashAnimation {
+            to {
+                stroke-dashoffset: -10;
+            }
+        }
+
+        .tooltip {
+            position: relative;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 100;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+    <div class="flex min-h-screen">
+        <!-- Sidebar Navigation -->
+        <aside class="w-72 sidebar-gradient text-white fixed h-full overflow-y-auto">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 rounded-lg gradient-bg flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">MemoryOS</h1>
+                        <p class="text-xs text-slate-400">v2.1 PRD Visualization</p>
+                    </div>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="#overview"
+                        class="nav-item active block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        📊 Overview & Mission
+                    </a>
+                    <a href="#architecture"
+                        class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🏗️ System Architecture
+                    </a>
+                    <a href="#write-path" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        ✍️ Write Path Flow
+                    </a>
+                    <a href="#retrieve-path"
+                        class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🔍 Retrieve Path Flow
+                    </a>
+                    <a href="#state-machines"
+                        class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🔄 State Machines
+                    </a>
+                    <a href="#security" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🔐 Security & Key Custody
+                    </a>
+                    <a href="#isolation" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🛡️ Tenant Isolation
+                    </a>
+                    <a href="#privacy" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        🗑️ Privacy & Deletion
+                    </a>
+                    <a href="#api" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        📡 API Contracts
+                    </a>
+                    <a href="#roadmap" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        📅 Development Roadmap
+                    </a>
+                    <a href="#invariants" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        ⚡ System Invariants
+                    </a>
+                    <a href="#slo" class="nav-item block px-4 py-3 rounded-lg hover:bg-slate-700 transition-all"
+                        onclick="setActiveNav(this)">
+                        📈 SLO & Reliability
+                    </a>
+                </nav>
+
+                <div class="mt-8 p-4 bg-slate-800 rounded-lg">
+                    <p class="text-xs text-slate-400 mb-2">Document Status</p>
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-green-500 pulse-dot"></span>
+                        <span class="text-sm font-medium">v2.1 - Engineering Executable</span>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">March 2026 · CONFIDENTIAL</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="ml-72 flex-1 p-8 overflow-y-auto">
+            <!-- Overview Section -->
+            <section id="overview" class="tab-content active fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <div class="mb-8">
+                        <span
+                            class="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium mb-4">Product
+                            Requirements Document</span>
+                        <h1 class="text-4xl font-bold text-slate-900 mb-4">MemoryOS v2.1</h1>
+                        <p class="text-xl text-slate-600">GitHub for Agent Memory — Version-Controlled, Auditable,
+                            Cryptographically Secure Memory Infrastructure</p>
+                    </div>
+
+                    <!-- Mission Card -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-4">🎯 Mission Statement</h2>
+                        <p class="text-lg text-slate-700 leading-relaxed">
+                            MemoryOS is the <span class="font-semibold text-purple-600">version-controlled, auditable,
+                                and cryptographically secure memory infrastructure layer</span>
+                            for production agentic AI — the persistent environment that transforms stateless models into
+                            <span class="font-semibold text-purple-600">trustworthy, compounding intelligent
+                                systems</span>.
+                        </p>
+
+                        <div class="grid md:grid-cols-3 gap-6 mt-8">
+                            <div class="metric-card rounded-xl p-6">
+                                <div class="text-3xl font-bold text-purple-600 mb-2">4 Tiers</div>
+                                <div class="text-sm text-slate-600">Memory Storage Layers</div>
+                                <div class="text-xs text-slate-500 mt-2">Redis → Qdrant → Neo4j → PostgreSQL</div>
+                            </div>
+                            <div class="metric-card rounded-xl p-6">
+                                <div class="text-3xl font-bold text-purple-600 mb-2">10</div>
+                                <div class="text-sm text-slate-600">System Invariants</div>
+                                <div class="text-xs text-slate-500 mt-2">Non-negotiable enforcement rules</div>
+                            </div>
+                            <div class="metric-card rounded-xl p-6">
+                                <div class="text-3xl font-bold text-purple-600 mb-2">99.9%</div>
+                                <div class="text-sm text-slate-600">SLO Target</div>
+                                <div class="text-xs text-slate-500 mt-2">Across all operations</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- JTBD Mapping -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📋 Jobs To Be Done → Feature Mapping</h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b border-slate-200">
+                                        <th class="text-left py-4 px-4 font-semibold text-slate-700">User Job (JTBD)
+                                        </th>
+                                        <th class="text-left py-4 px-4 font-semibold text-slate-700">Primary Feature
+                                        </th>
+                                        <th class="text-left py-4 px-4 font-semibold text-slate-700">Acceptance Test
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm">
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-4 px-4 text-slate-700">When I restart my agent, I want it to
+                                            remember everything from prior sessions</td>
+                                        <td class="py-4 px-4"><span
+                                                class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">Tier 2
+                                                Episodic Memory + Retrieval</span></td>
+                                        <td class="py-4 px-4 text-slate-600">Agent cold-started in session N+1 recalls
+                                            top-3 facts from session N</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-4 px-4 text-slate-700">When my agent makes a wrong decision, I
+                                            want to know what it believed</td>
+                                        <td class="py-4 px-4"><span
+                                                class="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">Version
+                                                Control + Time-Travel API</span></td>
+                                        <td class="py-4 px-4 text-slate-600">Given commit hash T, retrieval at as_of=T
+                                            returns identical results in 3 runs</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-4 px-4 text-slate-700">When a swarm of agents works together, I
+                                            want shared learning</td>
+                                        <td class="py-4 px-4"><span
+                                                class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">Multi-agent
+                                                PR Protocol + Merge</span></td>
+                                        <td class="py-4 px-4 text-slate-600">Agent A learns fact F, submits PR, Agent B
+                                            retrieves F with provenance</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-4 px-4 text-slate-700">When a malicious user tries to corrupt
+                                            memory, block the attack</td>
+                                        <td class="py-4 px-4"><span
+                                                class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs">Intent
+                                                Classifier + Sandbox</span></td>
+                                        <td class="py-4 px-4 text-slate-600">≥95% block or quarantine rate on labeled
+                                            attack set</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                        <td class="py-4 px-4 text-slate-700">When agents learn contradictory things, I
+                                            want governed resolution</td>
+                                        <td class="py-4 px-4"><span
+                                                class="px-2 py-1 bg-orange-100 text-orange-700 rounded text-xs">Conflict
+                                                Resolution Protocol</span></td>
+                                        <td class="py-4 px-4 text-slate-600">ConflictRecord created, resolution
+                                            committed with resolver_id and rationale</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Architecture Image -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🏗️ System Architecture Overview</h2>
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                graph TD
+                                A[Agent SDK] --> B[Memory Gateway]
+                                B --> C[Intent Classifier]
+                                C --> D{Suspicious?}
+                                D -->|Yes| E[SANDBOX Branch]
+                                D -->|No| F[Main Branch]
+                                F --> G[PostgreSQL Commit Log]
+                                E --> G
+                                G --> H[Outbox Table]
+                                H --> I[Debezium CDC]
+                                I --> J[Kafka Topics]
+                                J --> K[Qdrant Writer]
+                                J --> L[Neo4j Writer]
+                                J --> M[Redis Invalidator]
+                                K --> N[Tier 2: Episodic]
+                                L --> O[Tier 3: Semantic Graph]
+                                M --> P[Tier 1: Working Memory]
+                                G --> Q[Tier 4: Relational]
+
+                                style A fill:#667eea,stroke:#333,stroke-width:2px,color:#fff
+                                style B fill:#764ba2,stroke:#333,stroke-width:2px,color:#fff
+                                style G fill:#10b981,stroke:#333,stroke-width:2px,color:#fff
+                                style J fill:#f59e0b,stroke:#333,stroke-width:2px,color:#fff
+                            </div>
+                        </div>
+                        <p class="text-sm text-slate-600 mt-4">
+                            <strong>Key Design Principle:</strong> PostgreSQL commit log is the <span
+                                class="text-purple-600 font-semibold">single canonical source of truth</span>.
+                            All other stores (Qdrant, Neo4j, Redis) are <span
+                                class="text-purple-600 font-semibold">projections</span> that can be rebuilt by
+                            replaying the commit log.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Architecture Section -->
+            <section id="architecture" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">🏗️ System Architecture</h1>
+
+                    <!-- Deployment Strategy -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📦 Deployment Strategy: Monolith-First</h2>
+                        <div class="grid md:grid-cols-4 gap-4">
+                            <div
+                                class="state-box rounded-xl p-6 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+                                <div class="text-sm font-semibold text-blue-700 mb-2">Phase A (0-8w)</div>
+                                <div class="text-2xl font-bold text-slate-900 mb-2">Modular Monolith</div>
+                                <div class="text-sm text-slate-600">memory-core + memory-worker</div>
+                                <div class="text-xs text-slate-500 mt-3">Gateway, VCS Core, Basic Retrieval, Write
+                                    Pipeline</div>
+                            </div>
+                            <div
+                                class="state-box rounded-xl p-6 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
+                                <div class="text-sm font-semibold text-purple-700 mb-2">Phase B (8-16w)</div>
+                                <div class="text-2xl font-bold text-slate-900 mb-2">Split VCS Service</div>
+                                <div class="text-sm text-slate-600">When: commit throughput >500/s</div>
+                                <div class="text-xs text-slate-500 mt-3">Extract VCS + Semantic-Diff when GPU-bound
+                                </div>
+                            </div>
+                            <div
+                                class="state-box rounded-xl p-6 bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
+                                <div class="text-sm font-semibold text-green-700 mb-2">Phase C (16-28w)</div>
+                                <div class="text-2xl font-bold text-slate-900 mb-2">Split Workers</div>
+                                <div class="text-sm text-slate-600">When: consolidation >30 min</div>
+                                <div class="text-xs text-slate-500 mt-3">Consolidation + Intent Classifier extraction
+                                </div>
+                            </div>
+                            <div
+                                class="state-box rounded-xl p-6 bg-gradient-to-br from-orange-50 to-orange-100 border border-orange-200">
+                                <div class="text-sm font-semibold text-orange-700 mb-2">Phase D (28-52w)</div>
+                                <div class="text-2xl font-bold text-slate-900 mb-2">14 Services</div>
+                                <div class="text-sm text-slate-600">Only if scaling thresholds hit</div>
+                                <div class="text-xs text-slate-500 mt-3">Not a target — a consequence of growth</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Canonical Source Diagram -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📝 Canonical Source of Truth — Event-Sourced
+                            Commit Log</h2>
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                sequenceDiagram
+                                participant SDK as Agent SDK
+                                participant GW as Memory Gateway
+                                participant PG as PostgreSQL
+                                participant CDC as Debezium
+                                participant Kafka as Kafka
+                                participant Qdrant as Qdrant Writer
+                                participant Neo4j as Neo4j Writer
+
+                                SDK->>GW: POST /memory (content, branch)
+                                GW->>PG: BEGIN TRANSACTION
+                                PG->>PG: INSERT commits table
+                                PG->>PG: INSERT outbox table
+                                PG->>GW: COMMIT TRANSACTION
+                                GW->>SDK: 202 Accepted (commit_hash)
+                                CDC->>Kafka: Publish commit event
+                                Kafka->>Qdrant: Consume & write embeddings
+                                Kafka->>Neo4j: Consume & update graph
+                                Note over Qdrant,Neo4j: Idempotency: commit_hash as key
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-6 bg-slate-100 rounded-xl">
+                            <h3 class="font-semibold text-slate-800 mb-4">🔑 Key Design Principles:</h3>
+                            <ul class="space-y-3 text-sm text-slate-700">
+                                <li class="flex items-start gap-3">
+                                    <span class="text-green-500 font-bold">✓</span>
+                                    <span><strong>Atomic Transaction:</strong> COMMIT record + OUTBOX event written in
+                                        same PostgreSQL transaction</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="text-green-500 font-bold">✓</span>
+                                    <span><strong>CDC via Debezium:</strong> Change Data Capture picks up outbox events
+                                        and publishes to Kafka</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="text-green-500 font-bold">✓</span>
+                                    <span><strong>Idempotency:</strong> Each consumer tracks processed commit_hash.
+                                        Duplicates are no-ops.</span>
+                                </li>
+                                <li class="flex items-start gap-3">
+                                    <span class="text-green-500 font-bold">✓</span>
+                                    <span><strong>Recovery:</strong> If any projection store fails, replay Kafka topic
+                                        from offset 0 for bit-identical state</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Storage Layers -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">💾 Four-Tier Memory Storage Architecture</h2>
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div class="rounded-xl p-6 bg-gradient-to-br from-red-50 to-red-100 border border-red-200">
+                                <h3 class="font-bold text-red-700 mb-2">⚡ Tier 1: Redis (Working Memory)</h3>
+                                <p class="text-sm text-slate-700 mb-3">Low-latency real-time access for active session
+                                    context</p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Response:</strong> &lt;5ms</div>
+                                    <div><strong>Use Case:</strong> Current conversation context, temporary state</div>
+                                    <div><strong>Retention:</strong> Session-scoped, cleared on disconnect</div>
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+                                <h3 class="font-bold text-blue-700 mb-2">🎯 Tier 2: Qdrant (Episodic Memory)</h3>
+                                <p class="text-sm text-slate-700 mb-3">Vector embeddings for semantic similarity search
+                                </p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Vector Size:</strong> 1536 (OpenAI) / 1024 (BAAI)</div>
+                                    <div><strong>Index:</strong> HNSW with cosine similarity</div>
+                                    <div><strong>Use Case:</strong> Semantic retrieval, near-duplicate detection</div>
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
+                                <h3 class="font-bold text-purple-700 mb-2">🕸️ Tier 3: Neo4j (Semantic Knowledge Graph)
+                                </h3>
+                                <p class="text-sm text-slate-700 mb-3">Graph relationships between entities, facts, and
+                                    beliefs</p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Node Types:</strong> ENTITY, FACT, RULE, BELIEF</div>
+                                    <div><strong>Edge Types:</strong> RELATED, SUPPORTS, CONTRADICTS</div>
+                                    <div><strong>Use Case:</strong> Relationship reasoning, entity linking</div>
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
+                                <h3 class="font-bold text-green-700 mb-2">📊 Tier 4: PostgreSQL (Relational Memory)</h3>
+                                <p class="text-sm text-slate-700 mb-3">Structured facts with ACID transaction guarantees
+                                </p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Schema:</strong> Full DDL in §5.1</div>
+                                    <div><strong>Isolation:</strong> Row-Level Security (RLS) per org</div>
+                                    <div><strong>Use Case:</strong> Structured queries, audit trail, compliance</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Deployment Profiles -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">☁️ Deployment Profiles: Cloud vs Sovereign
+                        </h2>
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b-2 border-slate-200">
+                                        <th class="text-left py-4 px-4 font-semibold text-slate-700">Component</th>
+                                        <th class="text-left py-4 px-4 font-semibold text-blue-700">☁️ Cloud Profile
+                                        </th>
+                                        <th class="text-left py-4 px-4 font-semibold text-purple-700">🏛️ Sovereign
+                                            (On-Prem)</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm">
+                                    <tr class="border-b border-slate-100">
+                                        <td class="py-4 px-4 font-medium text-slate-700">Embedding Model</td>
+                                        <td class="py-4 px-4 text-slate-600">OpenAI text-embedding-3-large (API)</td>
+                                        <td class="py-4 px-4 text-slate-600">BAAI/bge-large-en-v1.5 (self-hosted Docker)
+                                        </td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100">
+                                        <td class="py-4 px-4 font-medium text-slate-700">NLI Contradiction Model</td>
+                                        <td class="py-4 px-4 text-slate-600">External NLI API (configurable)</td>
+                                        <td class="py-4 px-4 text-slate-600">DeBERTa-v3-large (self-hosted GPU pod)</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100">
+                                        <td class="py-4 px-4 font-medium text-slate-700">Key Management</td>
+                                        <td class="py-4 px-4 text-slate-600">AWS KMS / GCP KMS (Hosted)</td>
+                                        <td class="py-4 px-4 text-slate-600">HashiCorp Vault (customer-managed HSM)</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100">
+                                        <td class="py-4 px-4 font-medium text-slate-700">Object Store</td>
+                                        <td class="py-4 px-4 text-slate-600">AWS S3</td>
+                                        <td class="py-4 px-4 text-slate-600">MinIO (S3-compatible)</td>
+                                    </tr>
+                                    <tr class="border-b border-slate-100">
+                                        <td class="py-4 px-4 font-medium text-slate-700">Event Stream</td>
+                                        <td class="py-4 px-4 text-slate-600">Confluent Cloud (Kafka)</td>
+                                        <td class="py-4 px-4 text-slate-600">Apache Kafka self-hosted</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-4 px-4 font-medium text-slate-700">External Network Calls</td>
+                                        <td class="py-4 px-4 text-slate-600">✅ Allowed (LLM APIs, telemetry)</td>
+                                        <td class="py-4 px-4 text-slate-600">❌ ZERO — air-gapped compatible</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-sm text-slate-600 mt-6 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r">
+                            <strong>⚠️ Important:</strong> Sovereign profile uses ONLY self-hosted components. Every
+                            deployment artifact is pre-packaged in a Helm chart
+                            with all container images stored in customer-managed registry. Zero external DNS calls at
+                            runtime.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Write Path Section -->
+            <section id="write-path" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">✍️ Write Path — Event-Sourced Architecture</h1>
+
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📊 Complete Write Flow</h2>
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                graph LR
+                                A[Agent SDK] -->|POST /memory| B[Memory Gateway]
+                                B --> C[Intent Classifier]
+                                C --> D{Injection<br />Attack?}
+                                D -->|Yes ≥95%| E[SANDBOX<br />Branch]
+                                D -->|No| F[Main<br />Branch]
+                                E --> G[PostgreSQL<br />Commit + Outbox]
+                                F --> G
+                                G --> H[Atomic<br />Transaction]
+                                H --> I[Debezium CDC]
+                                I --> J[Kafka Topic:<br />memory.commits.org_id]
+                                J --> K[Qdrant Writer]
+                                J --> L[Neo4j Writer]
+                                J --> M[Redis Invalidator]
+                                K --> N[Episodic<br />Embeddings]
+                                L --> O[Semantic<br />Graph]
+                                M --> P[Cache<br />Bust]
+
+                                style A fill:#667eea,color:#fff
+                                style B fill:#764ba2,color:#fff
+                                style G fill:#10b981,color:#fff
+                                style J fill:#f59e0b,color:#fff
+                                style E fill:#ef4444,color:#fff
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Step by Step -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🔢 Step-by-Step Write Process</h2>
+                        <div class="space-y-4">
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="w-10 h-10 rounded-full gradient-bg text-white flex items-center justify-center font-bold flex-shrink-0">
+                                    1</div>
+                                <div class="flex-1 p-4 bg-slate-50 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Agent SDK → Memory Gateway</h3>
+                                    <p class="text-sm text-slate-600">Agent calls POST /v1/repos/{repo_id}/memory with
+                                        content, source_type, priority, branch, evidence, data_class</p>
+                                    <div class="mt-2 code-block p-3">
+                                        <pre class="text-xs text-green-400 mono">{
+  "content": "User prefers Python for data tasks",
+  "source_type": "USER_STATED",
+  "priority": "normal",
+  "branch": "main",
+  "data_class": "GENERAL"
+}</pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="w-10 h-10 rounded-full gradient-bg text-white flex items-center justify-center font-bold flex-shrink-0">
+                                    2</div>
+                                <div class="flex-1 p-4 bg-slate-50 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Intent Classification + Poisoning
+                                        Defense</h3>
+                                    <p class="text-sm text-slate-600">Intent classifier evaluates for injection attacks.
+                                        If suspicious → route to SANDBOX branch</p>
+                                    <div class="mt-2 flex gap-2">
+                                        <span class="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">≥95% attack
+                                            detection</span>
+                                        <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">≤2%
+                                            false-block rate</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="w-10 h-10 rounded-full gradient-bg text-white flex items-center justify-center font-bold flex-shrink-0">
+                                    3</div>
+                                <div class="flex-1 p-4 bg-slate-50 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Atomic Transaction: Commit + Outbox
+                                    </h3>
+                                    <p class="text-sm text-slate-600">Within single PostgreSQL transaction:</p>
+                                    <ul class="text-sm text-slate-600 mt-2 space-y-1">
+                                        <li>• Write COMMIT record to commits table</li>
+                                        <li>• Write OUTBOX event to outbox table</li>
+                                    </ul>
+                                    <div class="mt-2 code-block p-3">
+                                        <pre class="text-xs text-green-400 mono">BEGIN TRANSACTION;
+  INSERT INTO commits (...) VALUES (...);
+  INSERT INTO outbox (aggregate_id, event_type, payload) VALUES (...);
+COMMIT TRANSACTION;</pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="w-10 h-10 rounded-full gradient-bg text-white flex items-center justify-center font-bold flex-shrink-0">
+                                    4</div>
+                                <div class="flex-1 p-4 bg-slate-50 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">CDC via Debezium → Kafka</h3>
+                                    <p class="text-sm text-slate-600">Debezium captures outbox changes and publishes to
+                                        Kafka topic: memory.commits.{org_id}</p>
+                                    <div class="mt-2 code-block p-3">
+                                        <pre class="text-xs text-green-400 mono">Topic: memory.commits.org_abc123
+Key: commit_hash
+Value: {event_type, payload, timestamp}</pre>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex items-start gap-4">
+                                <div
+                                    class="w-10 h-10 rounded-full gradient-bg text-white flex items-center justify-center font-bold flex-shrink-0">
+                                    5</div>
+                                <div class="flex-1 p-4 bg-slate-50 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Projection Writers (Idempotent)</h3>
+                                    <p class="text-sm text-slate-600">Multiple consumers process Kafka events in
+                                        parallel:</p>
+                                    <ul class="text-sm text-slate-600 mt-2 space-y-1">
+                                        <li>• <strong>Qdrant Writer:</strong> Generate embeddings, store in
+                                            episodes_{org_id}</li>
+                                        <li>• <strong>Neo4j Writer:</strong> Create/update graph nodes and edges</li>
+                                        <li>• <strong>Redis Invalidator:</strong> Bust relevant cache entries</li>
+                                    </ul>
+                                    <div class="mt-2 flex gap-2">
+                                        <span
+                                            class="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs">Idempotency
+                                            key = commit_hash</span>
+                                        <span class="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">Duplicates =
+                                            no-ops</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Semantic Diff Engine -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🔬 Unified Semantic Diff Engine</h2>
+                        <div class="p-6 bg-slate-100 rounded-xl mb-6">
+                            <h3 class="font-semibold text-slate-800 mb-4">Contradiction Detection Pipeline (P0 Fix
+                                Applied)</h3>
+                            <div class="space-y-3 text-sm text-slate-700">
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">1</span>
+                                    <span><strong>Embed:</strong> Generate embedding for new memory candidate</span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">2</span>
+                                    <span><strong>ANN Retrieval:</strong> Get top-20 candidates with cosine ≥
+                                        0.50</span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">3</span>
+                                    <span><strong>Classification:</strong></span>
+                                </div>
+                                <div class="ml-11 space-y-2">
+                                    <div class="p-2 bg-green-50 rounded">• sim ≥ 0.95 → <strong>DUPLICATE</strong>
+                                        (reinforce existing)</div>
+                                    <div class="p-2 bg-blue-50 rounded">• sim 0.85-0.95 + NLI ENTAILMENT →
+                                        <strong>REFINEMENT</strong>
+                                    </div>
+                                    <div class="p-2 bg-red-50 rounded">• sim 0.85-0.95 + NLI CONTRADICTION →
+                                        <strong>CONTRADICTION</strong> (create ConflictRecord)
+                                    </div>
+                                    <div class="p-2 bg-purple-50 rounded">• sim 0.60-0.85 → Run NLI for non-obvious
+                                        contradictions</div>
+                                    <div class="p-2 bg-gray-50 rounded">• sim 0.50-0.60 →
+                                        <strong>WEAKLY_RELATED</strong> (add graph edge)
+                                    </div>
+                                    <div class="p-2 bg-slate-100 rounded">• No candidates → <strong>NOVEL</strong></div>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span
+                                        class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs">4</span>
+                                    <span><strong>Conflict Escalation:</strong> If CONTRADICTION → write to SANDBOX
+                                        branch, create ConflictRecord</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r">
+                            <p class="text-sm text-slate-700">
+                                <strong>⚠️ P0 Fix Applied:</strong> Cosine-sign-based contradiction (cosine &lt; 0.00)
+                                is REMOVED.
+                                All contradiction detection goes through the unified ANN → NLI classifier path. This is
+                                deterministic and auditable.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Retrieve Path Section -->
+            <section id="retrieve-path" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">🔍 Retrieve Path — Multi-Tier Memory Retrieval
+                    </h1>
+
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📊 Complete Retrieval Flow</h2>
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                graph TD
+                                A[Agent SDK] -->|POST /retrieve| B[Memory Gateway]
+                                B --> C[Parse Query + Context]
+                                C --> D[Generate Query Embedding]
+                                D --> E{Include Tiers?}
+                                E -->|WORKING| F[Redis Lookup]
+                                E -->|EPISODIC| G[Qdrant ANN Search]
+                                E -->|SEMANTIC| H[Neo4j Graph Query]
+                                E -->|RELATIONAL| I[PostgreSQL RLS Query]
+                                F --> J[Score Fusion Engine]
+                                G --> J
+                                H --> J
+                                I --> J
+                                J --> K[Rank by Final Score]
+                                K --> L[Filter by min_confidence]
+                                L --> M[Filter by min_importance]
+                                M --> N[Assemble XML Context]
+                                N --> O[Return to Agent]
+
+                                style A fill:#667eea,color:#fff
+                                style B fill:#764ba2,color:#fff
+                                style J fill:#f59e0b,color:#fff
+                                style N fill:#10b981,color:#fff
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- API Contract -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📡 Retrieve API Contract</h2>
+                        <div class="code-block p-6 mb-6">
+                            <pre class="text-sm text-green-400 mono">POST /v1/repos/{repo_id}/retrieve
+
+Request:
+{
+  "query": "string (required)",
+  "token_budget": 500-8000 (default: 2000),
+  "entity_context": ["entity_type:id", ...],
+  "include_tiers": ["WORKING", "EPISODIC", "SEMANTIC", "RELATIONAL"],
+  "branch": "string (default: main)",
+  "as_of_commit": "string|null",  // Time-travel retrieval
+  "min_confidence": 0.0-1.0 (default: 0.3),
+  "min_importance": 0.0-1.0 (default: 0.0)
+}
+
+Response: 200 OK
+{
+  "injected_context": "string (XML block for LLM)",
+  "memories": [...],
+  "as_of_commit": "string",
+  "token_count": integer,
+  "fallback_used": false
+}</pre>
+                        </div>
+                    </div>
+
+                    <!-- Scoring Engine -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🎯 Scoring Fusion Engine</h2>
+                        <div class="grid md:grid-cols-3 gap-6">
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+                                <h3 class="font-bold text-blue-700 mb-3">📍 Relevance Score</h3>
+                                <p class="text-sm text-slate-700 mb-3">Cosine similarity between query embedding and
+                                    memory embedding</p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Range:</strong> 0.0 - 1.0</div>
+                                    <div><strong>Source:</strong> Qdrant ANN search</div>
+                                    <div><strong>Weight:</strong> 40% of final score</div>
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
+                                <h3 class="font-bold text-green-700 mb-3">⏰ Recency Score</h3>
+                                <p class="text-sm text-slate-700 mb-3">Time decay function based on commit timestamp</p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Range:</strong> 0.0 - 1.0</div>
+                                    <div><strong>Formula:</strong> exp(-λ × days_since_commit)</div>
+                                    <div><strong>Weight:</strong> 30% of final score</div>
+                                </div>
+                            </div>
+                            <div
+                                class="rounded-xl p-6 bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
+                                <h3 class="font-bold text-purple-700 mb-3">⭐ Importance Score</h3>
+                                <p class="text-sm text-slate-700 mb-3">ML classifier prediction + access count boost</p>
+                                <div class="text-xs text-slate-600">
+                                    <div><strong>Range:</strong> 0.0 - 1.0</div>
+                                    <div><strong>Model:</strong> F1 ≥ 0.78 on high-importance class</div>
+                                    <div><strong>Weight:</strong> 30% of final score</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-slate-100 rounded-xl">
+                            <h4 class="font-semibold text-slate-800 mb-2">Final Score Calculation:</h4>
+                            <div class="code-block p-3">
+                                <pre class="text-xs text-green-400 mono">final_score = (relevance × 0.40) + (recency × 0.30) + (importance × 0.30)
+
+// Memories ranked by final_score, filtered by min_confidence and min_importance
+// Top results assembled into XML context block for LLM injection</pre>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Time-Travel Retrieval -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">⏱️ Time-Travel Retrieval (Audit Feature)</h2>
+                        <div class="p-6 bg-slate-100 rounded-xl">
+                            <h3 class="font-semibold text-slate-800 mb-4">How It Works:</h3>
+                            <div class="space-y-4 text-sm text-slate-700">
+                                <div class="flex items-start gap-3">
+                                    <span class="text-purple-500 font-bold">1.</span>
+                                    <div>
+                                        <strong>Query with as_of_commit parameter:</strong>
+                                        <div class="code-block p-2 mt-2">
+                                            <pre
+                                                class="text-xs text-green-400 mono">GET /v1/repos/{repo_id}/retrieve?as_of_commit=abc123...</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-purple-500 font-bold">2.</span>
+                                    <div>
+                                        <strong>System replays commits 0 → as_of_commit:</strong>
+                                        <ul class="mt-2 space-y-1">
+                                            <li>• Load all commits up to and including target hash</li>
+                                            <li>• Apply each commit's diff_object in order</li>
+                                            <li>• Build memory state at that point in time</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-purple-500 font-bold">3.</span>
+                                    <div>
+                                        <strong>Acceptance Test (INV-03):</strong>
+                                        <div class="mt-2 p-3 bg-green-50 rounded">
+                                            Given commit hash T, retrieval query at as_of=T returns <span
+                                                class="font-semibold text-green-700">identical result set in 3
+                                                independent runs</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r">
+                            <p class="text-sm text-slate-700">
+                                <strong>🎯 Use Case:</strong> When your agent makes a wrong decision, you can audit
+                                exactly what it believed at that moment
+                                by querying memory state at the commit hash corresponding to that decision point.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- State Machines Section -->
+            <section id="state-machines" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">🔄 Lifecycle State Machines</h1>
+
+                    <!-- Branch Lifecycle -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg mb-8">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🌿 Branch Lifecycle State Machine (P0 Fix
+                            Applied)</h2>
+
+                        <div class="p-4 bg-red-50 border-l-4 border-red-500 rounded-r mb-6">
+                            <p class="text-sm text-slate-700">
+                                <strong>⚠️ P0 Fix — Branch-Delete Audit Contradiction:</strong>
+                                v1.0 contradiction: 'no garbage data persists' vs 'compliance can inspect abandoned
+                                branches'.
+                                <span class="font-semibold">Resolution: soft-delete separates operational state from
+                                    data retention.</span>
+                                Commit data is ALWAYS retained per retention policy regardless of branch operational
+                                status.
+                            </p>
+                        </div>
+
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                stateDiagram-v2
+                                [*] --> ACTIVE
+                                ACTIVE --> SOFT_DELETED: agent/user deletes
+                                ACTIVE --> MERGED: PR approved + merged
+                                ACTIVE --> LEGAL_HOLD: legal hold request
+                                SOFT_DELETED --> HARD_DELETED: retention TTL expires AND no legal hold
+                                SOFT_DELETED --> LEGAL_HOLD: legal hold request
+                                LEGAL_HOLD --> SOFT_DELETED: hold expires + release
+                                MERGED --> [*]: terminal state
+                                HARD_DELETED --> [*]: terminal state
+                                LEGAL_HOLD --> [*]: terminal state (immovable)
+
+                                note right of ACTIVE
+                                Normal operational state
+                                Visible in listings
+                                Can be mutated
+                                end note
+
+                                note right of SOFT_DELETED
+                                Not visible in normal listing
+                                Commits accessible via audit API
+                                Retention period active
+                                end note
+
+                                note right of LEGAL_HOLD
+                                Immutable
+                                Cannot be deleted
+                                Until hold released
+                                end note
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r">
+                            <p class="text-sm text-slate-700">
+                                <strong>🎯 Use Case:</strong> Ensures compliance with data retention policies while
+                                maintaining operational flexibility. Branches can be soft-deleted for cleanup but
+                                remain auditable until retention expires.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Memory Lifecycle -->
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">🧠 Memory Lifecycle State Machine</h2>
+
+                        <div class="diagram-container">
+                            <div class="mermaid">
+                                stateDiagram-v2
+                                [*] --> ACTIVE
+                                ACTIVE --> OBSOLETE: memory_decay_threshold exceeded
+                                ACTIVE --> ARCHIVED: manual archive action
+                                OBSOLETE --> ARCHIVED: manual archive action
+                                ARCHIVED --> [*]: terminal state
+
+                                note right of ACTIVE
+                                Normal operational state
+                                Eligible for retrieval
+                                Can be mutated
+                                end note
+
+                                note right of OBSOLETE
+                                Low relevance score
+                                Not shown in normal retrieval
+                                Eligible for cleanup
+                                end note
+
+                                note right of ARCHIVED
+                                Immutable
+                                Not eligible for retrieval
+                                Cannot be mutated
+                                end note
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-purple-50 border-l-4 border-purple-500 rounded-r">
+                            <p class="text-sm text-slate-700">
+                                <strong>🎯 Use Case:</strong> Automates memory management by retiring low-relevance
+                                memories and archiving
+                                high-value ones, ensuring retrieval relevance and storage efficiency.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Audit Trail Section -->
+            <section id="audit-trail" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">🔍 Immutable Audit Trail</h1>
+
+                    <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                        <h2 class="text-2xl font-bold text-slate-900 mb-6">📜 Audit Log Structure</h2>
+
+                        <div class="p-4 bg-slate-100 rounded-xl">
+                            <h3 class="font-semibold text-slate-800 mb-4">Immutable Log Entry Format:</h3>
+                            <div class="code-block p-3">
+                                <pre class="text-xs text-green-400 mono">{
+  "event_id": "evt_1234567890",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "event_type": "commit_created",
+  "repo_id": "repo_abc123",
+  "branch_id": "branch_xyz789",
+  "commit_hash": "a1b2c3d4e5f6...",
+  "user_id": "user_456",
+  "metadata": {
+    "commit_message": "feat: add user authentication",
+    "diff_size": 1245
+  },
+  "signature": "sha256=...",
+  "previous_event_id": "evt_1234567889"
+}</pre>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-r">
+                            <h3 class="font-semibold text-blue-800 mb-2">Key Features:</h3>
+                            <ul class="text-sm text-slate-700 space-y-2">
+                                <li class="flex items-start gap-2">
+                                    <span class="text-blue-500">✓</span>
+                                    <span><strong>Immutable:</strong> Once written, entries cannot be modified or
+                                        deleted</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-blue-500">✓</span>
+                                    <span><strong>Cryptographically Signed:</strong> Each entry includes SHA-256
+                                        signature</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-blue-500">✓</span>
+                                    <span><strong>Chained:</strong> Each entry links to previous event via
+                                        previous_event_id</span>
+                                </li>
+                                <li class="flex items-start gap-2">
+                                    <span class="text-blue-500">✓</span>
+                                    <span><strong>Time-Travel Accessible:</strong> All events retained for audit
+                                        purposes</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-r">
+                            <h3 class="font-semibold text-green-800 mb-2">Acceptance Tests:</h3>
+                            <div class="text-sm text-slate-700 space-y-2">
+                                <div class="flex items-start gap-2">
+                                    <span class="text-green-500">✓</span>
+                                    <span><strong>INV-04:</strong> Audit log entries are immutable and cannot be
+                                        modified or deleted</span>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-green-500">✓</span>
+                                    <span><strong>INV-05:</strong> Audit log entries can be retrieved in
+                                        chronological order</span>
+                                </div>
+                                <div class="flex items-start gap-2">
+                                    <span class="text-green-500">✓</span>
+                                    <span><strong>INV-06:</strong> Audit log entries include cryptographic
+                                        signatures</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- API Reference Section -->
+            <section id="api-reference" class="tab-content fade-in">
+                <div class="max-w-6xl mx-auto">
+                    <h1 class="text-3xl font-bold text-slate-900 mb-8">🔌 API Reference</h1>
+
+                    <div class="space-y-6">
+                        <!-- Repositories -->
+                        <div class="card-gradient rounded-2xl p-8 shadow-lg">
+                            <h2 class="text-2xl font-bold text-slate-900 mb-6">📦 Repositories</h2>
+
+                            <div class="space-y-4">
+                                <div class="p-4 bg-slate-100 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Create Repository</h3>
+                                    <div class="code-block p-3">
+                                        <pre class="text-xs text-green-400 mono">POST /v1/repos
+
+{
+  "name": "my-project",
+  "description": "Project memory space",
+  "owner_id": "user_123"
+}</pre>
+                                    </div>
+                                    <div class="mt-2 p-3 bg-green-50 rounded">
+                                        <span class="font-semibold text-green-700">✓</span>
+                                        <span>Returns repo_id for use in all other endpoints</span>
+                                    </div>
+                                </div>
+
+                                <div class="p-4 bg-slate-100 rounded-xl">
+                                    <h3 class="font-semibold text-slate-800 mb-2">Get Repository</h3>
+                                    <div class="code-block p-3">
+                                        <pre class="text-xs text-green-40
